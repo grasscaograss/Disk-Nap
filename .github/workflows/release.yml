@@ -1,0 +1,43 @@
+name: macOS Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - name: Build and test
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' menubar/Info.plist)
+          test "$RELEASE_TAG" = "v$version"
+          test "$(uname -m)" = arm64
+          make test
+          make package
+      - name: Publish prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          archive="build/Disk-Nap-$RELEASE_TAG-macOS-arm64.zip"
+          gh release create "$RELEASE_TAG" "$archive" "$archive.sha256" \
+            --verify-tag --prerelease --title "Disk Nap $RELEASE_TAG" --notes-file - <<'EOF'
+          Disk Nap is an experimental menu bar app for monitoring external SSD power and sleep on macOS.
+
+          - **Requirements** · Apple silicon, macOS 14 or later, and the Xcode Command Line Tools.
+          - **Install** · Unzip the archive and move `Disk Nap.app` to Applications. Open the SSD icon in the menu bar.
+          - **Settings** · Choose English or Simplified Chinese and optionally start Disk Nap at login.
+          - **Scope** · The downloadable app observes the supported SSD. The automatic sleep test image is available in source builds configured with `LAB_PYTHON`.
+
+          This prerelease uses an ad hoc signature and has not been notarized by Apple.
+
+          磁盘小憩是用于观察外置 SSD 功耗与休眠的菜单栏原型。需要 Apple 芯片、macOS 14 或更新版本及 Xcode 命令行工具。解压后将 `Disk Nap.app` 拖入「应用程序」。齿轮菜单可设置语言和登录时自动启动。本预览版采用临时签名，未经 Apple 公证。
+          EOF

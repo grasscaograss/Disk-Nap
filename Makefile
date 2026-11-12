@@ -1,8 +1,10 @@
 PYTHON ?= python3
 CC = clang
 MENU_APP = build/Disk Nap.app
+APP_VERSION = $(shell /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' menubar/Info.plist)
+RELEASE_ARCHIVE = build/Disk-Nap-v$(APP_VERSION)-macOS-$(shell uname -m).zip
 
-.PHONY: all test menubar
+.PHONY: all test menubar package
 
 all: build/usb-control build/power-events
 
@@ -29,3 +31,9 @@ menubar: build/power-events
 	@if [ -n "$(LAB_PYTHON)" ]; then plutil -insert LabPythonExecutable -string "$(LAB_PYTHON)" "$(MENU_APP)/Contents/Info.plist"; fi
 	xcrun swiftc -target "$$(uname -m)-apple-macosx14.0" -swift-version 5 -O -parse-as-library menubar/*.swift -o "$(MENU_APP)/Contents/MacOS/DiskNap"
 	codesign --force --sign - "$(MENU_APP)"
+
+package: override LAB_PYTHON :=
+package: menubar
+	codesign --verify --deep --strict "$(MENU_APP)"
+	/usr/bin/ditto -c -k --sequesterRsrc --keepParent "$(MENU_APP)" "$(RELEASE_ARCHIVE)"
+	cd build && /usr/bin/shasum -a 256 "$(notdir $(RELEASE_ARCHIVE))" > "$(notdir $(RELEASE_ARCHIVE)).sha256"

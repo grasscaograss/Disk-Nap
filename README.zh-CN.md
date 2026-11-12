@@ -8,6 +8,10 @@
 
 菜单栏应用需要 macOS 14 或更新版本和 Xcode 命令行工具。命令行工具和测试环境需要 Python 3.9 或更新版本。
 
+Apple 芯片 Mac 可从 [GitHub Releases](https://github.com/grasscaograss/Disk-Nap/releases) 下载 ZIP，解压后将 `Disk Nap.app` 拖入「应用程序」。预览版采用临时签名，未经 Apple 公证。
+
+也可以从源码编译：
+
 ```sh
 git clone https://github.com/grasscaograss/Disk-Nap.git
 cd Disk-Nap

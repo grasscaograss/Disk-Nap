@@ -8,6 +8,10 @@ Disk Nap is an experimental macOS menu bar app for tracking external SSD power a
 
 The menu bar app requires macOS 14 or later and the Xcode Command Line Tools. The command-line tools and test lab require Python 3.9 or later.
 
+On Apple silicon, download the ZIP from [GitHub Releases](https://github.com/grasscaograss/Disk-Nap/releases), unzip it, and move `Disk Nap.app` to Applications. The prerelease is ad hoc-signed and has not been notarized by Apple.
+
+To build from source:
+
 ```sh
 git clone https://github.com/grasscaograss/Disk-Nap.git
 cd Disk-Nap
