@@ -1,14 +1,45 @@
-# Mac SSD Sleep
+# Disk Nap
 
-Mac SSD Sleep is an experimental macOS tool for suspending a directly connected USB SSD. It provides explicit suspend cycles, physical I/O observation, and a scratch-folder lab for automatic suspend and wake.
+[简体中文](README.zh-CN.md)
+
+Disk Nap is an experimental macOS menu bar app for tracking external SSD power and testing automatic sleep and wake. The menu bar prototype observes a compatible SSD while it stays mounted. Its automatic sleep switch controls a separate APFS test image.
 
 ## Quick start
 
-Install the Xcode Command Line Tools and use Python 3.9 or newer.
+The menu bar app requires macOS 14 or later and the Xcode Command Line Tools. The command-line tools and test lab require Python 3.9 or later.
 
 ```sh
-git clone https://github.com/grasscaograss/mac-ssd-sleep.git
-cd mac-ssd-sleep
+git clone https://github.com/grasscaograss/Disk-Nap.git
+cd Disk-Nap
+make menubar
+open "build/Disk Nap.app"
+```
+
+Click the SSD icon in the menu bar. Disk Nap follows the system language by default. Use **Language** to choose English or Simplified Chinese (磁盘小憩). To try the UI with labeled sample data, launch `open -n "build/Disk Nap.app" --args --preview`.
+
+### What the app shows
+
+- **Overview** shows physical SSD idle time, measured sleep, and power. Click the main power number to switch between watts, sampled energy use, and estimated sleep savings. The lid card records the Mac's battery change and SSD sleep state around lid closure.
+- **Sleep Strategy** estimates how long the SSD could have slept over the last seven days at the selected idle threshold. With Auto Sleep on, the card shows confirmed physical sleep time and the associated estimated energy savings. Click the savings figure to switch between Wh and an equivalent share of the Mac's full battery. The app shows a threshold recommendation when it has enough idle records and the suggested setting differs from the current one.
+
+The app keeps up to seven days of observation records on the Mac. Power readings and battery percentages depend on the hardware and available samples. The USB wattage mapping has been verified on one port of the 13-inch M4 MacBook Air. Energy use includes only intervals between valid samples while the Mac is awake. The lid savings comparison requires valid battery sessions in both modes.
+
+### Try Auto Sleep on a test image
+
+Create the Python environment shown in [Scratch wake lab](#scratch-wake-lab), then build with its Python executable:
+
+```sh
+make menubar LAB_PYTHON=/tmp/mac-ssd-sleep-lab-venv/bin/python
+open "build/Disk Nap.app" --args --show
+```
+
+The app starts in Observation Mode. Turn on **Auto Sleep** to test idle- and system-sleep-triggered detachment. A file request through **Open Test Folder** wakes the image at the same path. **Only on battery power** pauses the strategy on external power and restarts the idle timer after unplugging. The connected SSD remains mounted for read-only observation throughout this test.
+
+## Command-line tools
+
+Use a supported test volume to check compatibility and run a manual USB suspend cycle.
+
+```sh
 make
 ./mac-ssd-sleep probe "/Volumes/Your SSD"
 ./mac-ssd-sleep cycle "/Volumes/Your SSD" --seconds 25 --verify-io
