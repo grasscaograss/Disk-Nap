@@ -72,3 +72,41 @@ class AccessGateTests(unittest.TestCase):
             with gate.access():
                 self.fail("An unverified backing path was exposed to an application")
         self.assertEqual(gate.active, 0)
+
+    def test_turning_off_restores_the_backing_and_disables_both_triggers(self):
+        self.now = 120
+        self.assertTrue(self.gate.idle_check())
+        self.gate.configure(False, 60)
+        self.backing.wake.assert_called_once()
+        self.now = 300
+        self.assertFalse(self.gate.idle_check())
+        self.assertFalse(self.gate.will_sleep())
+        self.backing.sleep.assert_called_once_with("idle")
+
+    def test_battery_only_gates_both_triggers_and_starts_a_new_idle_window_after_unplug(self):
+        self.gate.configure(True, 120, battery_only=True)
+        self.now = 300
+        self.assertFalse(self.gate.idle_check())
+        self.assertFalse(self.gate.will_sleep())
+        self.backing.sleep.assert_not_called()
+        self.gate.did_wake()
+        self.now = 360
+        self.gate.set_power_source(True)
+        self.now = 479
+        self.assertFalse(self.gate.idle_check())
+        self.now = 480
+        self.assertTrue(self.gate.idle_check())
+        self.backing.sleep.assert_called_once_with("idle")
+
+    def test_connecting_power_restores_a_sleeping_backing_after_the_mac_wakes(self):
+        self.gate.set_power_source(True)
+        self.gate.configure(True, 120, battery_only=True)
+        self.assertTrue(self.gate.will_sleep())
+        self.gate.set_power_source(False)
+        self.assertFalse(self.gate.idle_check())
+        self.backing.wake.assert_not_called()
+        self.gate.did_wake()
+        self.assertFalse(self.gate.idle_check())
+        self.backing.wake.assert_called_once()
+        self.assertFalse(self.gate.will_sleep())
+        self.backing.sleep.assert_called_once_with("system-sleep")

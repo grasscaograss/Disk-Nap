@@ -33,6 +33,7 @@ class USBDevice:
     serial: str = field(repr=False)
     whole_disk: str
     partitions: tuple[str, ...]
+    display_name: str = "USB SSD"
 
 
 @dataclass(frozen=True)
@@ -113,9 +114,12 @@ def find_supported_devices(usb_roots, service_roots):
             if whole and entry.get("BSD Name", "").startswith(whole + "s")
             and DISK_PARTITION.fullmatch(entry["BSD Name"])
         )
+        product = node.get("USB Product Name") or node["IORegistryEntryName"]
+        vendor = node.get("USB Vendor Name")
+        display_name = " ".join(part.strip() for part in (vendor, product) if isinstance(part, str) and part.strip())
         yield USBDevice(
             node["IORegistryEntryID"], node["locationID"], node["USB Serial Number"],
-            whole, partitions,
+            whole, partitions, display_name,
         )
 
 

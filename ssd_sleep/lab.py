@@ -123,6 +123,9 @@ def handle_power_events(process, gate):
         elif event == "did-wake":
             gate.did_wake()
             log("mac-did-wake")
+        elif event.startswith("power-source-"):
+            gate.set_power_source(event == "power-source-battery")
+            log(event)
 
 
 def monitor_idle(stop, gate, interval):
@@ -133,7 +136,25 @@ def monitor_idle(stop, gate, interval):
             log("idle-sleep-deferred", error=str(error))
 
 
-def run(root, idle_seconds, usb_volume=None):
+def handle_policy_input(gate, stop):
+    for line in sys.stdin:
+        if stop.is_set():
+            break
+        try:
+            command = json.loads(line)
+            automatic, idle_seconds = command["automatic"], command["idle_seconds"]
+            battery_only = command.get("battery_only", False)
+            if (type(automatic) is not bool or type(battery_only) is not bool
+                    or type(idle_seconds) is not int or not 1 <= idle_seconds <= 7200):
+                raise ValueError("Invalid automatic sleep settings.")
+            gate.configure(automatic, idle_seconds, battery_only)
+            log("policy-changed", automatic=automatic, idle_seconds=idle_seconds, battery_only=battery_only)
+        except (KeyError, TypeError, ValueError, *BACKING_ERRORS) as error:
+            log("policy-error", error=str(error))
+    stop.set()
+
+
+def run(root, idle_seconds, usb_volume=None, *, controlled=False):
     from cheroot.wsgi import Server
     from wsgidav.wsgidav_app import WsgiDAVApp
 
@@ -148,6 +169,8 @@ def run(root, idle_seconds, usb_volume=None):
     else:
         backing = DiskImage(root)
         gate = AccessGate(backing, idle_seconds)
+    if controlled:
+        gate.configure(False, idle_seconds)
     mount = root / "files"
     mount.mkdir()
     stop = threading.Event()
@@ -183,6 +206,8 @@ def run(root, idle_seconds, usb_volume=None):
         idle.start()
         log("lab-ready", path=str(mount), backing_path=str(backing.mount), idle_seconds=idle_seconds,
             backing="usb" if usb_volume else "image")
+        if controlled:
+            threading.Thread(target=handle_policy_input, args=(gate, stop), daemon=True).start()
         stop.wait()
         idle.join()
     finally:
@@ -205,6 +230,7 @@ def main():
     parser.add_argument("directory", type=Path, help="empty private directory on the Mac's internal drive")
     parser.add_argument("--idle-seconds", type=int, default=120)
     parser.add_argument("--usb-volume", type=Path, help="eject and resume this APFS volume for a USB scratch test")
+    parser.add_argument("--controlled", action="store_true", help="accept JSON policy commands for the disk-image lab")
     args = parser.parse_args()
     root = args.directory.resolve()
     if (not root.is_dir() or any(root.iterdir()) or root.stat().st_mode & 0o077
@@ -212,8 +238,10 @@ def main():
         parser.error("Use an empty, owner-only directory on the internal drive (for example, mktemp -d).")
     if args.idle_seconds < 1 or not POWER_EVENTS.is_file():
         parser.error("Use a positive idle threshold and run make to build the power listener.")
+    if args.controlled and args.usb_volume is not None:
+        parser.error("Interactive controls are available for the disk-image lab.")
     try:
-        run(root, args.idle_seconds, args.usb_volume)
+        run(root, args.idle_seconds, args.usb_volume, controlled=args.controlled)
     except (ImportError, *BACKING_ERRORS) as error:
         print(f"SSD wake lab: {error}", file=sys.stderr)
         return 1

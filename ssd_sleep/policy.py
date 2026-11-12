@@ -17,6 +17,9 @@ class AccessGate:
         self.last_access = clock()
         self.active = 0
         self.asleep = False
+        self.automatic = True
+        self.battery_only = False
+        self.on_battery = False
         self.system_sleep = False
         self.lock = Lock()
 
@@ -51,7 +54,14 @@ class AccessGate:
 
     def idle_check(self):
         with self.lock:
-            if self.system_sleep or self.active or self.asleep:
+            if self.system_sleep:
+                return False
+            if not self._automatic_allowed():
+                if self.asleep:
+                    self.backing.wake()
+                    self.asleep = False
+                return False
+            if self.active or self.asleep:
                 return False
             if self.sample_activity is not None and self.sample_activity():
                 self.last_access = self.clock()
@@ -62,9 +72,30 @@ class AccessGate:
     def will_sleep(self):
         with self.lock:
             self.system_sleep = True
-            return self._suspend_backing("system-sleep")
+            return self._automatic_allowed() and self._suspend_backing("system-sleep")
 
     def did_wake(self):
         with self.lock:
             self.system_sleep = False
+            self.last_access = self.clock()
+
+    def _automatic_allowed(self):
+        return self.automatic and (not self.battery_only or self.on_battery)
+
+    def set_power_source(self, on_battery):
+        with self.lock:
+            if self.on_battery != on_battery:
+                self.on_battery = on_battery
+                if self.battery_only:
+                    self.last_access = self.clock()
+
+    def configure(self, automatic, idle_seconds, battery_only=False):
+        with self.lock:
+            allowed = automatic and (not battery_only or self.on_battery)
+            if self.asleep and not self.system_sleep and not allowed:
+                self.backing.wake()
+                self.asleep = False
+            self.automatic = automatic
+            self.battery_only = battery_only
+            self.idle_seconds = idle_seconds
             self.last_access = self.clock()

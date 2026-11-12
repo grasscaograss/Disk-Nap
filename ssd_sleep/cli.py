@@ -151,7 +151,7 @@ def main():
         target = probe(args.volume)
         if args.command == "probe":
             print(json.dumps({
-                "device": "ZhiTai SPIRIT PREMIUM",
+                "device": target.usb.display_name,
                 "mount_point": str(target.volume.mount_point),
                 "whole_disk": target.usb.whole_disk,
                 "filesystem": target.volume.filesystem,

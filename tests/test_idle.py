@@ -1,4 +1,5 @@
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
@@ -44,7 +45,13 @@ class IdleMonitorTests(unittest.TestCase):
             "UsbLinkSpeed": macos.USB_LINK_SPEED, "locationID": USB.location, "USB Serial Number": USB.serial,
             "IORegistryEntryChildren": [physical_driver],
         }
-        self.assertEqual(list(macos.find_supported_devices([device], [device])), [USB])
+        self.assertEqual(list(macos.find_supported_devices([device], [device])), [
+            replace(USB, display_name=macos.USB_NAME),
+        ])
+        device.update({"USB Vendor Name": "Test Vendor", "USB Product Name": "Test Model"})
+        self.assertEqual(list(macos.find_supported_devices([device], [device])), [
+            replace(USB, display_name="Test Vendor Test Model"),
+        ])
         self.assertEqual(idle.storage_sample(USB, [device]), (202, COUNTERS))
         device["IORegistryEntryID"] += 1
         with self.assertRaisesRegex(macos.SleepError, "original physical disk"):
