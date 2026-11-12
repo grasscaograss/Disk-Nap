@@ -154,13 +154,19 @@ struct Panel: View {
             .padding(.bottom, 12)
 
             VStack(spacing: 10) {
-                if let issue = model.observationIssue ?? model.labIssue {
+                if let issue = model.loginItemIssue ?? model.observationIssue ?? model.labIssue {
                     Label(l10n[issue.rawValue], systemImage: "exclamationmark.circle")
                         .font(.system(size: 12))
                         .foregroundStyle(.orange)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else if model.observing && snapshot?.state == "waiting" {
                     Label(l10n["device.waiting"], systemImage: "externaldrive.badge.questionmark")
+                        .font(.system(size: 12))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                if model.needsLoginApproval {
+                    Button(l10n["login.approval"], systemImage: "gearshape") { model.openLoginSettings() }
+                        .buttonStyle(.borderless)
                         .font(.system(size: 12))
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -456,20 +462,29 @@ struct Panel: View {
             }
             Spacer()
             Menu {
-                Picker(l10n["language.title"], selection: $model.language) {
-                    ForEach(AppLanguage.allCases) { language in
-                        Text(language.label(in: l10n)).tag(language)
+                Toggle(l10n["login.start"], isOn: Binding(get: { model.launchAtLogin }, set: model.setLaunchAtLogin))
+                    .accessibilityIdentifier("launchAtLoginToggle")
+                Menu(l10n["language.title"]) {
+                    Picker(l10n["language.title"], selection: $model.language) {
+                        ForEach(AppLanguage.allCases) { language in
+                            Text(language.label(in: l10n)).tag(language)
+                        }
                     }
+                    .labelsHidden()
+                    .pickerStyle(.inline)
                 }
-                .pickerStyle(.inline)
+                .accessibilityIdentifier("languageMenu")
             } label: {
-                Label(l10n["language.title"], systemImage: "globe")
+                Label(l10n["footer.settings"], systemImage: "gearshape")
+                    .labelStyle(.iconOnly)
                     .font(.system(size: 11))
             }
             .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
             .controlSize(.small)
             .fixedSize()
-            .accessibilityIdentifier("languageMenu")
+            .accessibilityIdentifier("settingsMenu")
+            .help(l10n["footer.settings"])
             Button(l10n["footer.quit"]) { NSApplication.shared.terminate(nil) }.buttonStyle(.borderless)
         }
         .font(.system(size: 11))

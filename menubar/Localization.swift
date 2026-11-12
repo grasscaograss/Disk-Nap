@@ -73,4 +73,5 @@ enum PanelIssue: String {
     case labStart = "error.lab.start"
     case labPolicy = "error.lab.policy"
     case labStopped = "error.lab.stopped"
+    case loginItemUpdate = "error.login.update"
 }

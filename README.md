@@ -15,7 +15,9 @@ make menubar
 open "build/Disk Nap.app"
 ```
 
-Click the SSD icon in the menu bar. Disk Nap follows the system language by default. Use **Language** to choose English or Simplified Chinese (磁盘小憩). To try the UI with labeled sample data, launch `open -n "build/Disk Nap.app" --args --preview`.
+Click the SSD icon in the menu bar. Disk Nap follows the system language by default. Use **Settings → Language** to choose English or Simplified Chinese (磁盘小憩). To try the UI with labeled sample data, launch `open -n "build/Disk Nap.app" --args --preview`.
+
+Use **Settings → Launch at Login** to open Disk Nap automatically when you sign in to macOS.
 
 ### What the app shows
 

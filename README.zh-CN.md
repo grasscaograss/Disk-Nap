@@ -15,7 +15,9 @@ make menubar
 open "build/Disk Nap.app"
 ```
 
-点击菜单栏的 SSD 图标。应用默认跟随 macOS 语言，可在底部「语言」中选择简体中文或英文。运行 `open -n "build/Disk Nap.app" --args --preview` 可查看带标记的演示数据。
+点击菜单栏的 SSD 图标。应用默认跟随 macOS 语言，可在底部「设置 → 语言」中选择简体中文或英文。运行 `open -n "build/Disk Nap.app" --args --preview` 可查看带标记的演示数据。
+
+通过面板底部的「设置 → 登录时自动启动」，可让磁盘小憩在登录 macOS 后自动打开。
 
 ### 界面功能
 

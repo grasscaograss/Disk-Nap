@@ -2,6 +2,7 @@ import AppKit
 import Combine
 import Foundation
 import OSLog
+import ServiceManagement
 
 struct Forecast: Decodable, Identifiable {
     var id: Int { minutes }
@@ -166,6 +167,8 @@ final class ObservationModel: ObservableObject {
     @Published private(set) var observing = false
     @Published private(set) var observationIssue: PanelIssue?
     @Published private(set) var labIssue: PanelIssue?
+    @Published private(set) var loginItemIssue: PanelIssue?
+    @Published private var loginItemStatus: SMAppService.Status = .notRegistered
     @Published private(set) var labReady = false
     @Published private(set) var automatic = false
     @Published private(set) var settingPolicy = false
@@ -191,6 +194,9 @@ final class ObservationModel: ObservableObject {
     private var labOutput: Pipe?
     private var labBuffer = Data()
 
+    var launchAtLogin: Bool { loginItemStatus == .enabled || needsLoginApproval }
+    var needsLoginApproval: Bool { loginItemStatus == .requiresApproval }
+
     init(options: LaunchOptions) {
         self.options = options
         defaults = options.loadDefaults()
@@ -201,6 +207,7 @@ final class ObservationModel: ObservableObject {
     }
 
     func startOnLaunch() {
+        refreshLoginItemStatus()
         do {
             try options.migrateSavedHistory()
         } catch {
@@ -212,6 +219,33 @@ final class ObservationModel: ObservableObject {
         } else if let python = options.labPython {
             startLab(python: python)
         }
+    }
+
+    func refreshLoginItemStatus() {
+        if !options.preview { loginItemStatus = SMAppService.mainApp.status }
+    }
+
+    func setLaunchAtLogin(_ enabled: Bool) {
+        loginItemIssue = nil
+        if options.preview {
+            loginItemStatus = enabled ? .enabled : .notRegistered
+            return
+        }
+        let service = SMAppService.mainApp
+        refreshLoginItemStatus()
+        guard enabled != launchAtLogin else { return }
+        do {
+            if enabled { try service.register() }
+            else { try service.unregister() }
+        } catch {
+            logger.error("Could not update the login item: \(error.localizedDescription, privacy: .private)")
+        }
+        refreshLoginItemStatus()
+        if launchAtLogin != enabled { loginItemIssue = .loginItemUpdate }
+    }
+
+    func openLoginSettings() {
+        if !options.preview { SMAppService.openSystemSettingsLoginItems() }
     }
 
     func setAutomatic(_ enabled: Bool) {

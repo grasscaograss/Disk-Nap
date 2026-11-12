@@ -69,7 +69,11 @@
 "strategy.apply" = "应用建议";
 
 "footer.testFolder" = "打开测试目录";
+"footer.settings" = "设置";
 "footer.quit" = "退出";
+"login.start" = "登录时自动启动";
+"login.approval" = "在系统设置中允许登录时自动启动";
+"error.login.update" = "无法更改登录时自动启动设置。";
 "error.observation.resources" = "应用缺少 SSD 观察组件。";
 "error.observation.start" = "无法启动 SSD 观察组件。";
 "error.observation.failed" = "SSD 观察组件发生错误。";

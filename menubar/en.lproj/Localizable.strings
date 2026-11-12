@@ -69,7 +69,11 @@
 "strategy.apply" = "Apply Suggestion";
 
 "footer.testFolder" = "Open Test Folder";
+"footer.settings" = "Settings";
 "footer.quit" = "Quit";
+"login.start" = "Launch at Login";
+"login.approval" = "Allow Launch at Login in System Settings";
+"error.login.update" = "Could not change Launch at Login.";
 "error.observation.resources" = "The SSD monitor is missing from the app.";
 "error.observation.start" = "The SSD monitor could not start.";
 "error.observation.failed" = "The SSD monitor encountered an error.";

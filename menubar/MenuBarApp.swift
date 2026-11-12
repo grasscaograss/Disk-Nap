@@ -39,6 +39,7 @@ final class MenuBarDelegate: NSObject, NSApplicationDelegate {
         if popover.isShown {
             popover.performClose(nil)
         } else {
+            model?.refreshLoginItemStatus()
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         }
     }
