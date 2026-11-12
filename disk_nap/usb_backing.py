@@ -51,7 +51,7 @@ class USBBacking:
         self.trace = root / "usb-control.log"
         self.worker = None
         self.previous_sample = None
-        self.mount = Path(tempfile.mkdtemp(prefix=".mac-ssd-sleep-lab-", dir=target.volume.mount_point))
+        self.mount = Path(tempfile.mkdtemp(prefix=".disk-nap-lab-", dir=target.volume.mount_point))
         self.check_access()
         self.refresh_metadata()
 
@@ -82,7 +82,7 @@ class USBBacking:
     def sleep(self, reason):
         self.check_access()
         self.refresh_metadata()
-        args = [sys.executable, "-u", "-m", "ssd_sleep.usb_backing",
+        args = [sys.executable, "-u", "-m", "disk_nap.usb_backing",
                 str(self.target.volume.mount_point), str(self.target.volume.uuid), str(self.target.usb.registry_id)]
         with self.trace.open("a") as output:
             offset = output.tell()

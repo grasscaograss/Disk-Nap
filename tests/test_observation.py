@@ -4,7 +4,7 @@ from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from ssd_sleep import observation
+from disk_nap import observation
 
 
 def window(seconds, io_ended=True):

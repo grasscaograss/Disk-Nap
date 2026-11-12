@@ -137,7 +137,7 @@ def main():
     args = parser.parse_args()
 
     if sys.platform != "darwin":
-        parser.exit(1, "mac-ssd-sleep requires macOS.\n")
+        parser.exit(1, "disk-nap requires macOS.\n")
     if args.command == "cycle" and not 1 <= args.seconds <= 600:
         parser.error("--seconds must be between 1 and 600")
     try:
@@ -165,5 +165,5 @@ def main():
             error = SleepError("A macOS command or the USB helper timed out.")
         elif isinstance(error, subprocess.CalledProcessError):
             error = SleepError(f"A macOS command or the USB helper exited with status {error.returncode}.")
-        print(f"mac-ssd-sleep: {error}", file=sys.stderr)
+        print(f"disk-nap: {error}", file=sys.stderr)
         return 1

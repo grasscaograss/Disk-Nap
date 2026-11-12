@@ -1,9 +1,9 @@
 import unittest
 from unittest.mock import Mock, patch
 
-from ssd_sleep.lab import gated_webdav
-from ssd_sleep.macos import SleepError
-from ssd_sleep.policy import AccessGate
+from disk_nap.lab import gated_webdav
+from disk_nap.macos import SleepError
+from disk_nap.policy import AccessGate
 
 
 class AccessGateTests(unittest.TestCase):
@@ -50,7 +50,7 @@ class AccessGateTests(unittest.TestCase):
         respond = Mock()
         self.assertEqual(list(serve(request, respond)), [b"root"])
         self.backing.wake.assert_not_called()
-        with patch("ssd_sleep.lab.log"):
+        with patch("disk_nap.lab.log"):
             self.assertEqual(list(serve({**request, "HTTP_DEPTH": "1"}, respond)), [b"files"])
         self.backing.wake.assert_called_once()
 

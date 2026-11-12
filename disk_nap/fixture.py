@@ -32,7 +32,7 @@ class IOFixture:
     """A uniquely named scratch directory used for optional write and readback."""
 
     def __init__(self):
-        self.name = f".mac-ssd-sleep-{uuid4().hex}"
+        self.name = f".disk-nap-{uuid4().hex}"
         self.payload = os.urandom(4096)
         self.created = False
 

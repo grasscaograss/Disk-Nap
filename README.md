@@ -29,7 +29,7 @@ The app keeps up to seven days of observation records on the Mac. Power readings
 Create the Python environment shown in [Scratch wake lab](#scratch-wake-lab), then build with its Python executable:
 
 ```sh
-make menubar LAB_PYTHON=/tmp/mac-ssd-sleep-lab-venv/bin/python
+make menubar LAB_PYTHON=/tmp/disk-nap-lab-venv/bin/python
 open "build/Disk Nap.app" --args --show
 ```
 
@@ -41,8 +41,8 @@ Use a supported test volume to check compatibility and run a manual USB suspend 
 
 ```sh
 make
-./mac-ssd-sleep probe "/Volumes/Your SSD"
-./mac-ssd-sleep cycle "/Volumes/Your SSD" --seconds 25 --verify-io
+./disk-nap probe "/Volumes/Your SSD"
+./disk-nap cycle "/Volumes/Your SSD" --seconds 25 --verify-io
 ```
 
 `probe` is a read-only check of the mounted volume. `cycle` safely ejects the entire device and waits for the original volume to return after USB resume. Close files on the SSD before running it. Press Ctrl-C during the hold to resume early.
@@ -52,7 +52,7 @@ The optional `--verify-io` flag creates a scratch directory on the SSD, verifies
 ## Observe idle time while mounted
 
 ```sh
-caffeinate -i ./mac-ssd-sleep watch "/Volumes/Your SSD" --seconds 610
+caffeinate -i ./disk-nap watch "/Volumes/Your SSD" --seconds 610
 ```
 
 `watch` accepts the actual mount path of an APFS or exFAT volume on the supported SSD, including a custom mount outside `/Volumes`. It runs without the USB helper. For APFS it follows the volume's physical store and samples the underlying disk's cumulative read and write counts and bytes every five seconds. Any change, counter reset, or sampling gap greater than twice the interval restarts the timer. Stop with Ctrl-C or pass a duration.
@@ -85,10 +85,10 @@ The lab keeps a stable macOS WebDAV mount backed by a disposable APFS disk image
 
 ```sh
 make
-python3 -m venv /tmp/mac-ssd-sleep-lab-venv
-/tmp/mac-ssd-sleep-lab-venv/bin/python -m pip install 'WsgiDAV==4.3.4' 'cheroot>=10,<12'
+python3 -m venv /tmp/disk-nap-lab-venv
+/tmp/disk-nap-lab-venv/bin/python -m pip install 'WsgiDAV==4.3.4' 'cheroot>=10,<12'
 lab_dir=$(mktemp -d)
-/tmp/mac-ssd-sleep-lab-venv/bin/python -m ssd_sleep.lab "$lab_dir"
+/tmp/disk-nap-lab-venv/bin/python -m disk_nap.lab "$lab_dir"
 ```
 
 Use the printed `files` path to open the fixtures or create scratch files. The events log shows backing attachment, detachment and macOS power notifications. Press Ctrl-C to clean up the mounts. The lab listens only on loopback and exports only its disposable image. It exercises path stability and access-triggered wake without sending USB commands.

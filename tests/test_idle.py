@@ -3,7 +3,7 @@ from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
-from ssd_sleep import idle, macos
+from disk_nap import idle, macos
 
 MOUNT = Path("/Users/test/External Documents")
 USB = macos.USBDevice(101, 42, "fixture-serial", "disk4", ("disk4s2",))

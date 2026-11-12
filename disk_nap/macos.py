@@ -218,7 +218,15 @@ def same_usb(expected):
 
 @contextmanager
 def exclusive_cycle(location):
-    lock = Path(tempfile.gettempdir()) / f"mac-ssd-sleep-{os.getuid()}-{location:x}.lock"
+    directory = Path(tempfile.gettempdir())
+    port_key = f"{os.getuid()}-{location:x}.lock"
+    # Older releases must still exclude a concurrent cycle on the same port.
+    with cycle_lock(directory / f"mac-ssd-sleep-{port_key}"), cycle_lock(directory / f"disk-nap-{port_key}"):
+        yield
+
+
+@contextmanager
+def cycle_lock(lock):
     descriptor = os.open(lock, os.O_NOFOLLOW | os.O_CREAT | os.O_RDWR, 0o600)
     try:
         attributes = os.fstat(descriptor)

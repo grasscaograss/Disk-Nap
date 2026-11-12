@@ -7,9 +7,9 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
     <key>CFBundleExecutable</key>
-    <string>MacSSDSleep</string>
+    <string>DiskNap</string>
     <key>CFBundleIdentifier</key>
-    <string>com.github.grasscaograss.mac-ssd-sleep.menubar</string>
+    <string>com.github.grasscaograss.disk-nap.menubar</string>
     <key>CFBundleName</key>
     <string>Disk Nap</string>
     <key>CFBundlePackageType</key>

@@ -20,11 +20,12 @@ test: all
 	$(PYTHON) -m unittest discover -s tests -v
 
 menubar: build/power-events
-	mkdir -p "$(MENU_APP)/Contents/MacOS" "$(MENU_APP)/Contents/Resources/ssd_sleep" "$(MENU_APP)/Contents/Resources/build"
+	$(RM) -r "$(MENU_APP)"
+	mkdir -p "$(MENU_APP)/Contents/MacOS" "$(MENU_APP)/Contents/Resources/disk_nap" "$(MENU_APP)/Contents/Resources/build"
 	cp menubar/Info.plist "$(MENU_APP)/Contents/Info.plist"
 	cp -R menubar/*.lproj "$(MENU_APP)/Contents/Resources/"
-	cp ssd_sleep/*.py "$(MENU_APP)/Contents/Resources/ssd_sleep/"
+	cp disk_nap/*.py "$(MENU_APP)/Contents/Resources/disk_nap/"
 	cp build/power-events "$(MENU_APP)/Contents/Resources/build/"
 	@if [ -n "$(LAB_PYTHON)" ]; then plutil -insert LabPythonExecutable -string "$(LAB_PYTHON)" "$(MENU_APP)/Contents/Info.plist"; fi
-	xcrun swiftc -target "$$(uname -m)-apple-macosx14.0" -swift-version 5 -O -parse-as-library menubar/*.swift -o "$(MENU_APP)/Contents/MacOS/MacSSDSleep"
+	xcrun swiftc -target "$$(uname -m)-apple-macosx14.0" -swift-version 5 -O -parse-as-library menubar/*.swift -o "$(MENU_APP)/Contents/MacOS/DiskNap"
 	codesign --force --sign - "$(MENU_APP)"

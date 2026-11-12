@@ -1,4 +1,5 @@
 import io
+import os
 import tempfile
 import unittest
 from contextlib import redirect_stdout
@@ -7,7 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 from uuid import UUID
 
-from ssd_sleep import cli, macos
+from disk_nap import cli, macos
 
 UUID_VALUE = UUID("2de8d17e-4214-4704-98cb-e0f72a272bb4")
 MOUNT = Path("/Volumes/Test SSD")
@@ -115,3 +116,10 @@ class DeviceSafetyTests(unittest.TestCase):
             with self.assertRaisesRegex(macos.SleepError, "Another cycle"):
                 with macos.exclusive_cycle(0xFFF123):
                     self.fail("Acquired an already locked port")
+
+    def test_legacy_cycle_lock_still_blocks_the_renamed_command(self):
+        with tempfile.TemporaryDirectory() as directory, patch.object(macos.tempfile, "gettempdir", return_value=directory):
+            legacy = Path(directory) / f"mac-ssd-sleep-{os.getuid()}-fff123.lock"
+            with macos.cycle_lock(legacy), self.assertRaisesRegex(macos.SleepError, "Another cycle"):
+                with macos.exclusive_cycle(0xFFF123):
+                    self.fail("Started a cycle while an older command held the port lock")

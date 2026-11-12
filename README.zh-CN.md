@@ -29,7 +29,7 @@ open "build/Disk Nap.app"
 先按[测试目录的自动唤醒实验](#测试目录的自动唤醒实验)创建 Python 环境，编译时传入该环境的 Python 路径。
 
 ```sh
-make menubar LAB_PYTHON=/tmp/mac-ssd-sleep-lab-venv/bin/python
+make menubar LAB_PYTHON=/tmp/disk-nap-lab-venv/bin/python
 open "build/Disk Nap.app" --args --show
 ```
 
@@ -41,8 +41,8 @@ open "build/Disk Nap.app" --args --show
 
 ```sh
 make
-./mac-ssd-sleep probe "/Volumes/Your SSD"
-./mac-ssd-sleep cycle "/Volumes/Your SSD" --seconds 25 --verify-io
+./disk-nap probe "/Volumes/Your SSD"
+./disk-nap cycle "/Volumes/Your SSD" --seconds 25 --verify-io
 ```
 
 `probe` 只读检查已挂载的卷。`cycle` 安全弹出整个设备，待 USB 恢复后将原卷挂回。运行前请关闭盘上打开的文件。挂起期间可按 Ctrl-C 提前恢复。
@@ -52,7 +52,7 @@ make
 ## 挂载时观察空闲时间
 
 ```sh
-caffeinate -i ./mac-ssd-sleep watch "/Volumes/Your SSD" --seconds 610
+caffeinate -i ./disk-nap watch "/Volumes/Your SSD" --seconds 610
 ```
 
 `watch` 接受兼容 SSD 上 APFS 或 exFAT 卷的实际挂载路径，也支持 `/Volumes` 之外的自定义路径。它无需 USB 控制组件。对于 APFS，它定位卷对应的物理盘，每 5 秒采集累计读写次数和字节数。计数变化、重置或采样中断超过两个采样周期时，空闲计时重新开始。可指定观察时长，或按 Ctrl-C 停止。
@@ -85,10 +85,10 @@ caffeinate -i ./mac-ssd-sleep watch "/Volumes/Your SSD" --seconds 610
 
 ```sh
 make
-python3 -m venv /tmp/mac-ssd-sleep-lab-venv
-/tmp/mac-ssd-sleep-lab-venv/bin/python -m pip install 'WsgiDAV==4.3.4' 'cheroot>=10,<12'
+python3 -m venv /tmp/disk-nap-lab-venv
+/tmp/disk-nap-lab-venv/bin/python -m pip install 'WsgiDAV==4.3.4' 'cheroot>=10,<12'
 lab_dir=$(mktemp -d)
-/tmp/mac-ssd-sleep-lab-venv/bin/python -m ssd_sleep.lab "$lab_dir"
+/tmp/disk-nap-lab-venv/bin/python -m disk_nap.lab "$lab_dir"
 ```
 
 用输出中的 `files` 路径打开示例或创建临时文件。事件日志会记录镜像挂载、卸载和 macOS 电源通知。按 Ctrl-C 清理挂载。实验只在本机回环地址提供访问，只共享测试镜像，可验证路径保持和按访问唤醒。

@@ -105,12 +105,43 @@ struct LaunchOptions {
     var labPython: String? {
         value(after: "--lab-python") ?? Bundle.main.object(forInfoDictionaryKey: "LabPythonExecutable") as? String
     }
+    private var applicationSupport: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+    }
     var dataDirectory: URL {
         if let path = value(after: "--data-directory") {
             return URL(fileURLWithPath: path, isDirectory: true)
         }
-        return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Mac SSD Sleep/Observation", isDirectory: true)
+        return applicationSupport.appendingPathComponent("Disk Nap/Observation", isDirectory: true)
+    }
+
+    func loadDefaults() -> UserDefaults {
+        let defaults = preview ? UserDefaults(suiteName: "DiskNap.Preview")! : .standard
+        let previousDomain = preview ? "MacSSDSleep.Preview" : "com.github.grasscaograss.mac-ssd-sleep.menubar"
+        if let previous = defaults.persistentDomain(forName: previousDomain) {
+            for key in ["language", "idleMinutes", "batteryOnly"] where defaults.object(forKey: key) == nil {
+                if let value = previous[key] { defaults.set(value, forKey: key) }
+            }
+        }
+        return defaults
+    }
+
+    func migrateSavedHistory() throws {
+        guard !preview, value(after: "--data-directory") == nil else { return }
+        let legacy = applicationSupport.appendingPathComponent("Mac SSD Sleep/Observation", isDirectory: true)
+        try Self.copySavedHistory(from: legacy, to: dataDirectory)
+    }
+
+    static func copySavedHistory(from legacy: URL, to current: URL) throws {
+        let files = FileManager.default
+        guard files.fileExists(atPath: legacy.path) else { return }
+        let records = try files.contentsOfDirectory(at: legacy, includingPropertiesForKeys: [.isRegularFileKey])
+        try files.createDirectory(at: current, withIntermediateDirectories: true)
+        for record in records where record.pathExtension == "json" {
+            guard try record.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile == true else { continue }
+            let target = current.appendingPathComponent(record.lastPathComponent)
+            if !files.fileExists(atPath: target.path) { try files.copyItem(at: record, to: target) }
+        }
     }
 }
 
@@ -162,7 +193,7 @@ final class ObservationModel: ObservableObject {
 
     init(options: LaunchOptions) {
         self.options = options
-        defaults = options.preview ? UserDefaults(suiteName: "MacSSDSleep.Preview")! : .standard
+        defaults = options.loadDefaults()
         language = defaults.string(forKey: "language").flatMap(AppLanguage.init(rawValue:)) ?? .system
         let stored = defaults.integer(forKey: "idleMinutes")
         threshold = (1...120).contains(stored) ? stored : 5
@@ -170,6 +201,11 @@ final class ObservationModel: ObservableObject {
     }
 
     func startOnLaunch() {
+        do {
+            try options.migrateSavedHistory()
+        } catch {
+            logger.error("Could not copy saved observation history: \(error.localizedDescription, privacy: .private)")
+        }
         start()
         if options.preview {
             labReady = true
@@ -217,7 +253,7 @@ final class ObservationModel: ObservableObject {
         let output = Pipe()
         child.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
         child.currentDirectoryURL = resources
-        var args = ["-B", "-u", "-m", "ssd_sleep.observation",
+        var args = ["-B", "-u", "-m", "disk_nap.observation",
                     "--data-directory", options.dataDirectory.path]
         if let mount = options.mount { args += ["--mount", mount] }
         child.arguments = args
@@ -281,7 +317,7 @@ final class ObservationModel: ObservableObject {
                                                     attributes: [.posixPermissions: 0o700])
             child.executableURL = URL(fileURLWithPath: python)
             child.currentDirectoryURL = resources
-            child.arguments = ["-B", "-u", "-m", "ssd_sleep.lab", root.path,
+            child.arguments = ["-B", "-u", "-m", "disk_nap.lab", root.path,
                                "--idle-seconds", String(threshold * 60), "--controlled"]
             child.standardInput = input
             child.standardOutput = output
