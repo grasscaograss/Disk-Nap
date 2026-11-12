@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 
 from .fixture import IOFixture
+from .idle import watch
 from .macos import (
     USB_CONTROL,
     SleepError,
@@ -123,8 +124,13 @@ def main():
     commands = parser.add_subparsers(dest="command", required=True)
     probe_command = commands.add_parser("probe", help="check whether a mounted volume is supported")
     cycle_command = commands.add_parser("cycle", help="eject, suspend, resume, and remount the volume")
+    watch_command = commands.add_parser("watch", help="observe physical SSD I/O without ejecting it")
     for command in (probe_command, cycle_command):
-        command.add_argument("volume", type=Path, help="volume mount point under /Volumes")
+        command.add_argument("volume", type=Path, help="absolute path to the volume mount point")
+    watch_command.add_argument("volume", type=Path, help="absolute path to the mounted APFS or exFAT volume")
+    watch_command.add_argument("--idle-seconds", type=int, default=600, help="quiet time threshold (default: 600)")
+    watch_command.add_argument("--interval", type=int, default=5, help="sampling interval in seconds (default: 5)")
+    watch_command.add_argument("--seconds", type=int, help="observation duration, otherwise runs until Ctrl-C")
     cycle_command.add_argument("--seconds", type=int, default=10, help="suspend duration (1–600)")
     cycle_command.add_argument("--verify-io", action="store_true",
                                help="verify read/write using a disposable directory on the target")
@@ -135,13 +141,20 @@ def main():
     if args.command == "cycle" and not 1 <= args.seconds <= 600:
         parser.error("--seconds must be between 1 and 600")
     try:
+        if args.command == "watch":
+            if min(args.idle_seconds, args.interval) <= 0 or (args.seconds is not None and args.seconds <= 0):
+                parser.error("watch durations must be positive")
+            try:
+                return watch(args.volume, args.idle_seconds, args.interval, args.seconds)
+            except KeyboardInterrupt:
+                return 130
         target = probe(args.volume)
         if args.command == "probe":
             print(json.dumps({
                 "device": "ZhiTai SPIRIT PREMIUM",
                 "mount_point": str(target.volume.mount_point),
                 "whole_disk": target.usb.whole_disk,
-                "filesystem": "exfat",
+                "filesystem": target.volume.filesystem,
                 "link_gbps": 10,
             }, indent=2))
             return 0

@@ -17,6 +17,7 @@ USB_CONTROL = Path(__file__).resolve().parents[1] / "build" / "usb-control"
 USB_VENDOR = 0x21C4
 USB_PRODUCT = 0x00C0
 USB_LINK_SPEED = 10_000_000_000
+USB_NAME = "SPIRIT PREMIUM"
 WHOLE_DISK = re.compile(r"disk[0-9]+")
 DISK_PARTITION = re.compile(r"disk[0-9]+s[0-9]+")
 
@@ -39,6 +40,7 @@ class MountedVolume:
     mount_point: Path
     device: str
     uuid: UUID = field(repr=False)
+    filesystem: str = "exfat"
 
 
 @dataclass(frozen=True)
@@ -76,6 +78,16 @@ def direct_usb_ids(roots):
     return {entry for root in roots for entry in walk(root) if isinstance(entry, int)}
 
 
+def whole_media(node):
+    name = node.get("BSD Name", "")
+    if node.get("Whole") is True and WHOLE_DISK.fullmatch(name):
+        # An APFS container presents its own whole media below the physical disk.
+        yield name
+        return
+    for child in children(node):
+        yield from whole_media(child)
+
+
 def find_supported_devices(usb_roots, service_roots):
     direct = direct_usb_ids(usb_roots)
     for node in service_roots:
@@ -83,7 +95,7 @@ def find_supported_devices(usb_roots, service_roots):
             continue
         if (
             node.get("IORegistryEntryID") not in direct
-            or node.get("IORegistryEntryName") != "SPIRIT PREMIUM"
+            or node.get("IORegistryEntryName") != USB_NAME
             or node.get("UsbLinkSpeed") != USB_LINK_SPEED
             or not isinstance(node.get("locationID"), int)
             or not isinstance(node.get("USB Serial Number"), str)
@@ -91,11 +103,7 @@ def find_supported_devices(usb_roots, service_roots):
         ):
             continue
 
-        media = [
-            entry["BSD Name"]
-            for entry in registry_nodes(node)
-            if entry.get("Whole") is True and WHOLE_DISK.fullmatch(entry.get("BSD Name", ""))
-        ]
+        media = list(whole_media(node))
         if len(media) > 1:
             continue
         whole = media[0] if media else ""
@@ -138,20 +146,60 @@ def matches_partition(info, usb, device):
     )
 
 
+def apfs_store(info):
+    stores = info.get("APFSPhysicalStores", ())
+    if len(stores) != 1 or not stores[0].get("APFSPhysicalStore"):
+        raise SleepError("Expected an APFS volume backed by one physical store.")
+    return stores[0]["APFSPhysicalStore"]
+
+
+def apfs_volume_devices(usb):
+    if not usb.partitions:
+        return []
+    listing = subprocess.check_output([DISKUTIL, "apfs", "list", "-plist"], timeout=5)
+    volumes = []
+    for container in plistlib.loads(listing)["Containers"]:
+        stores = [store["DeviceIdentifier"] for store in container["PhysicalStores"]]
+        if not set(usb.partitions).intersection(stores):
+            continue
+        if len(stores) != 1:
+            raise SleepError("An APFS container spans multiple physical stores.")
+        volumes.extend(container["Volumes"])
+    return volumes
+
+
 def probe(mount_point):
-    if mount_point.parent != Path("/Volumes"):
-        raise SleepError("Specify the mounted volume directly under /Volumes.")
+    if not mount_point.is_absolute() or mount_point == Path("/"):
+        raise SleepError("Specify the absolute mount point of the external volume.")
     info = disk_info(mount_point)
     if info.get("MountPoint") != str(mount_point):
         raise SleepError("The path is not the root of a mounted volume.")
-    partition = info.get("DeviceIdentifier")
-    candidates = [usb for usb in devices() if matches_partition(info, usb, partition)]
+    volume = info.get("DeviceIdentifier")
+    filesystem = info.get("FilesystemType")
+    if filesystem == "apfs":
+        if (info.get("Internal") is not False or info.get("BusProtocol") != "USB"
+                or info.get("APFSSnapshot") is not False or not info.get("VolumeUUID")):
+            raise SleepError("Expected an external USB APFS volume.")
+        partition = apfs_store(info)
+        candidates = [usb for usb in devices() if partition in usb.partitions]
+    else:
+        if mount_point.parent != Path("/Volumes"):
+            raise SleepError("Specify the mounted exFAT volume directly under /Volumes.")
+        partition = volume
+        candidates = [usb for usb in devices() if matches_partition(info, usb, partition)]
     if len(candidates) != 1:
-        raise SleepError("Expected one directly connected SPIRIT PREMIUM with an exFAT volume.")
+        raise SleepError("Expected one directly connected SPIRIT PREMIUM with an APFS or exFAT volume.")
     usb = candidates[0]
     if any(disk_info("/dev/" + name).get("MountPoint") for name in usb.partitions if name != partition):
         raise SleepError("Another volume on this physical disk is mounted.")
-    return Target(usb, MountedVolume(mount_point, partition, UUID(info["VolumeUUID"])))
+    volume_uuid = UUID(info["VolumeUUID"])
+    if filesystem == "apfs":
+        volumes = apfs_volume_devices(usb)
+        if len(volumes) != 1 or volumes[0].get("DeviceIdentifier") != volume or (
+            UUID(volumes[0]["APFSVolumeUUID"]) != volume_uuid
+        ):
+            raise SleepError("The APFS cycle requires exactly one APFS volume on the physical disk.")
+    return Target(usb, MountedVolume(mount_point, volume, volume_uuid, filesystem))
 
 
 def same_usb(expected):
@@ -188,16 +236,30 @@ def usb_arguments(operation, usb, target):
     ]
 
 
-def disk_command(operation, device):
+def disk_command(operation, device, *, mount_point=None):
+    arguments = [DISKUTIL, operation]
+    if mount_point is not None:
+        arguments.extend(["-mountPoint", str(mount_point)])
     result = subprocess.run(
-        [DISKUTIL, operation, "/dev/" + device], capture_output=True, text=True, timeout=12,
+        [*arguments, "/dev/" + device], capture_output=True, text=True, timeout=20,
     )
     if result.returncode:
         message = result.stderr.strip() or result.stdout.strip()
         raise SleepError(message or f"diskutil {operation} failed.")
 
 
-def restored_volume(usb, expected_uuid):
+def restored_volume(usb, expected_uuid, filesystem):
+    if filesystem == "apfs":
+        volumes = [volume["DeviceIdentifier"] for volume in apfs_volume_devices(usb)
+                   if UUID(volume["APFSVolumeUUID"]) == expected_uuid]
+        if len(volumes) > 1:
+            raise SleepError("Multiple APFS volumes have the expected volume UUID.")
+        if volumes:
+            device = volumes[0]
+            info = disk_info("/dev/" + device)
+            if info.get("VolumeUUID") and UUID(info["VolumeUUID"]) == expected_uuid:
+                return device, Path(info["MountPoint"]) if info.get("MountPoint") else None
+        return None, None
     matches = []
     for partition in usb.partitions:
         info = disk_info("/dev/" + partition)
@@ -209,6 +271,24 @@ def restored_volume(usb, expected_uuid):
     return matches[0] if matches else (None, None)
 
 
+def remount_apfs(device, current_mount, volume):
+    mount_point = volume.mount_point
+    if mount_point.resolve() != mount_point:
+        raise SleepError("The original mount path now resolves to a different directory.")
+    mount_point.mkdir(mode=0o700, exist_ok=True)
+    if any(mount_point.iterdir()):
+        raise SleepError("The original mount point is not empty. Check the disk in Disk Utility.")
+    if current_mount is not None:
+        disk_command("unmount", device)
+    try:
+        disk_command("mount", device, mount_point=mount_point)
+    except (SleepError, subprocess.TimeoutExpired):
+        info = disk_info("/dev/" + device)
+        if info.get("VolumeUUID") and UUID(info["VolumeUUID"]) == volume.uuid and not info.get("MountPoint"):
+            disk_command("mount", device)
+        raise
+
+
 def restore(target):
     deadline = time.monotonic() + 25
     reenumerated = False
@@ -216,12 +296,16 @@ def restore(target):
     while time.monotonic() < deadline:
         usb = same_usb(target.usb)
         if usb is not None:
-            partition, mount_point = restored_volume(usb, target.volume.uuid)
-            if mount_point:
-                return MountedVolume(mount_point, partition, target.volume.uuid)
-            if partition and partition not in mount_requested:
-                disk_command("mount", partition)
-                mount_requested.add(partition)
+            volume = target.volume
+            device, mount_point = restored_volume(usb, volume.uuid, volume.filesystem)
+            if mount_point and (volume.filesystem == "exfat" or mount_point == volume.mount_point):
+                return MountedVolume(mount_point, device, volume.uuid, volume.filesystem)
+            if device and (device, mount_point) not in mount_requested:
+                if volume.filesystem == "apfs":
+                    remount_apfs(device, mount_point, volume)
+                else:
+                    disk_command("mount", device)
+                mount_requested.add((device, mount_point))
             if not usb.whole_disk and not reenumerated:
                 # The original configuration may return before macOS recreates IOMedia.
                 subprocess.run(usb_arguments("reenumerate", usb, target), check=True, timeout=8)

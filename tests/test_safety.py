@@ -1,4 +1,5 @@
 import io
+import tempfile
 import unittest
 from contextlib import redirect_stdout
 from dataclasses import replace
@@ -66,6 +67,37 @@ class DeviceSafetyTests(unittest.TestCase):
             restored = macos.restore(TARGET)
         disk.assert_called_once_with("mount", "disk9s3")
         self.assertEqual(restored, macos.MountedVolume(renamed_mount, "disk9s3", UUID_VALUE))
+
+    def test_apfs_recovery_restores_custom_mount_after_automount(self):
+        with tempfile.TemporaryDirectory() as directory:
+            mount = Path(directory).resolve() / "External Documents"
+            volume = macos.MountedVolume(mount, "disk5s1", UUID_VALUE, "apfs")
+            target = macos.Target(USB, volume)
+            current = replace(USB, whole_disk="disk8", partitions=("disk8s2",))
+            other_mount = Path("/Volumes/Auto-mounted SSD")
+            with patch.object(macos, "same_usb", return_value=current), patch.object(
+                macos, "apfs_volume_devices", return_value=[{
+                    "APFSVolumeUUID": str(UUID_VALUE), "DeviceIdentifier": "disk9s1",
+                }],
+            ), patch.object(macos, "disk_info", side_effect=[
+                {"VolumeUUID": str(UUID_VALUE), "MountPoint": str(other_mount)},
+                {"VolumeUUID": str(UUID_VALUE), "MountPoint": str(mount)},
+            ]), patch.object(macos, "disk_command") as disk, patch.object(macos.time, "sleep"):
+                restored = macos.restore(target)
+            self.assertEqual(disk.call_count, 2)
+            self.assertEqual(disk.call_args_list[0].args, ("unmount", "disk9s1"))
+            disk.assert_called_with("mount", "disk9s1", mount_point=mount)
+            self.assertEqual(restored, replace(volume, device="disk9s1"))
+
+    def test_apfs_recovery_does_not_mount_over_local_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            mount = Path(directory).resolve()
+            (mount / "local-file").touch()
+            volume = macos.MountedVolume(mount, "disk5s1", UUID_VALUE, "apfs")
+            with patch.object(macos, "disk_command") as disk:
+                with self.assertRaisesRegex(macos.SleepError, "not empty"):
+                    macos.remount_apfs("disk9s1", Path("/Volumes/SSD"), volume)
+            disk.assert_not_called()
 
     def test_eject_refusal_prevents_usb_control(self):
         cycle = cli.Cycle(TARGET, 10, verify_io=False)

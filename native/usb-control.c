@@ -1,6 +1,7 @@
 #include <CoreFoundation/CoreFoundation.h>
 #include <IOKit/IOCFPlugIn.h>
 #include <IOKit/IOKitLib.h>
+#include <IOKit/storage/IOMedia.h>
 #include <IOKit/usb/IOUSBLib.h>
 
 #include <errno.h>
@@ -52,6 +53,50 @@ static bool is_unmounted(const char *whole_disk, const char *mount_point) {
         }
     }
     return true;
+}
+
+static bool has_no_open_media(uint64_t entry_id) {
+    io_service_t service = IOServiceGetMatchingService(
+        kIOMainPortDefault, IORegistryEntryIDMatching(entry_id));
+    if (!service) {
+        return false;
+    }
+    io_iterator_t children = IO_OBJECT_NULL;
+    kern_return_t result = IORegistryEntryCreateIterator(
+        service, kIOServicePlane, kIORegistryIterateRecursively, &children);
+    IOObjectRelease(service);
+    if (result != KERN_SUCCESS || !children) {
+        return false;
+    }
+    // Disk Arbitration can eject an APFS disk while its closed media stay registered.
+    bool safe = false;
+    for (int attempt = 0; attempt < 3 && !safe; attempt++) {
+        io_registry_entry_t child;
+        bool open_or_unknown = false;
+        while ((child = IOIteratorNext(children))) {
+            if (IOObjectConformsTo(child, kIOMediaClass)) {
+                CFTypeRef open = IORegistryEntryCreateCFProperty(
+                    child, CFSTR(kIOMediaOpenKey), kCFAllocatorDefault, 0);
+                open_or_unknown = open != kCFBooleanFalse;
+                if (open) {
+                    CFRelease(open);
+                }
+            }
+            IOObjectRelease(child);
+            if (open_or_unknown) {
+                break;
+            }
+        }
+        if (open_or_unknown) {
+            break;
+        }
+        safe = IOIteratorIsValid(children);
+        if (!safe) {
+            IOIteratorReset(children);
+        }
+    }
+    IOObjectRelease(children);
+    return safe;
 }
 
 static bool matches_serial(io_service_t service, const char *expected) {
@@ -168,12 +213,12 @@ int main(int argc, const char *argv[]) {
         !parse_number(argv[2], &entry_id) || !entry_id ||
         !parse_number(argv[3], &location) || location > UINT32_MAX || !*argv[4] ||
         strncmp(whole_disk, "/dev/disk", 9) || !parse_number(whole_disk + 9, &disk_number) ||
-        strncmp(mount_point, "/Volumes/", 9) || !mount_point[9] ||
-        (suspend && (!parse_number(argv[7], &seconds) || seconds < 1 || seconds > 600))) {
+        mount_point[0] != '/' || !mount_point[1] ||
+        (suspend && (!parse_number(argv[7], &seconds) || seconds > 600))) {
         return 2;
     }
-    if (!is_unmounted(whole_disk, mount_point)) {
-        fputs("The target disk still has mounted volumes.\n", stderr);
+    if (!is_unmounted(whole_disk, mount_point) || !has_no_open_media(entry_id)) {
+        fputs("The target USB device still has mounted or open media, or could not be verified.\n", stderr);
         return 3;
     }
     struct sigaction action = {.sa_handler = request_wake};
@@ -189,9 +234,9 @@ int main(int argc, const char *argv[]) {
         return 5;
     }
     IOReturn result = kIOReturnBusy;
-    if (is_unmounted(whole_disk, mount_point)) {
+    if (is_unmounted(whole_disk, mount_point) && has_no_open_media(entry_id)) {
         result = suspend
-            ? suspend_for(device, (int)seconds * 1000)
+            ? suspend_for(device, seconds ? (int)seconds * 1000 : -1)
             : report("reenumerate_usb", (*device)->USBDeviceReEnumerate(device, 0));
     }
     IOReturn close_result = report("close_usb_device", (*device)->USBDeviceClose(device));

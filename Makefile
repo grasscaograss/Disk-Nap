@@ -3,9 +3,14 @@ CC = clang
 
 .PHONY: all test
 
-all: build/usb-control
+all: build/usb-control build/power-events
 
 build/usb-control: native/usb-control.c
+	mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) -std=c17 -O2 -Wall -Wextra -Werror $< \
+		$(LDFLAGS) -framework IOKit -framework CoreFoundation -o $@
+
+build/power-events: native/power-events.c
 	mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) -std=c17 -O2 -Wall -Wextra -Werror $< \
 		$(LDFLAGS) -framework IOKit -framework CoreFoundation -o $@
